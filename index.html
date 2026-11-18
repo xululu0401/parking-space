@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>车位的余量 - 泊车空间计算</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 1200px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #eee;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+    .diagram-card {
+      min-height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #diagram {
+      width: 100%;
+      height: 400px;
+    }
+    .judgment {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .judgment.plenty {
+      background: #4CAF50;
+      color: white;
+    }
+    .judgment.tight {
+      background: #FF9800;
+      color: white;
+    }
+    .judgment.insufficient {
+      background: #f44336;
+      color: white;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .result-row:last-child {
+      border-bottom: none;
+    }
+    .result-label {
+      color: #666;
+      font-size: 13px;
+    }
+    .result-value {
+      color: #333;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .success {
+      color: #4CAF50;
+      font-weight: 500;
+    }
+    .error {
+      color: #f44336;
+      font-weight: 500;
+    }
+    #error {
+      display: none;
+      background: #ffebee;
+      color: #c62828;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .export-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .footer {
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>车位的余量</h1>
+    <div class="subtitle">泊车空间计算 - 计算车辆与车位的余量关系</div>
+    
+    <div id="error"></div>
+    
+    <div class="main-layout">
+      <!-- 左栏：输入参数 -->
+      <div class="card">
+        <div class="card-title">车辆与车位参数</div>
+        
+        <div class="section">
+          <div class="section-title">车辆尺寸</div>
+          <div class="form-group">
+            <label for="carLength">车长（米）</label>
+            <input type="number" id="carLength" step="0.01" min="0.1" value="4.5">
+          </div>
+          <div class="form-group">
+            <label for="carWidth">车宽（米）</label>
+            <input type="number" id="carWidth" step="0.01" min="0.1" value="1.8">
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">车位尺寸</div>
+          <div class="form-group">
+            <label for="spaceLength">车位长（米）</label>
+            <input type="number" id="spaceLength" step="0.01" min="0.1" value="5.0">
+          </div>
+          <div class="form-group">
+            <label for="spaceWidth">车位宽（米）</label>
+            <input type="number" id="spaceWidth" step="0.01" min="0.1" value="2.4">
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">其他参数</div>
+          <div class="form-group">
+            <label for="doorWidth">车门宽度（米）</label>
+            <input type="number" id="doorWidth" step="0.01" min="0.1" value="0.6">
+          </div>
+          <div class="form-group">
+            <label for="turningRadius">转弯半径（米）</label>
+            <input type="number" id="turningRadius" step="0.1" min="0.1" value="5.5">
+          </div>
+        </div>
+      </div>
+      
+      <!-- 中栏：俯视示意图 -->
+      <div class="card diagram-card">
+        <svg id="diagram"></svg>
+      </div>
+      
+      <!-- 右栏：计算结果 -->
+      <div class="card">
+        <div class="card-title">计算结果</div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div id="overallJudgment" class="judgment"></div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">余量数据</div>
+          <div class="result-row">
+            <span class="result-label">前后余量</span>
+            <span class="result-value" id="frontRearClearance"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">左右余量</span>
+            <span class="result-value" id="sideClearance"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">单侧开门空间</span>
+            <span class="result-value" id="doorSpace"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">开门判定</span>
+            <span class="result-value" id="doorJudgment"></span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">平行泊车</div>
+          <div class="result-row">
+            <span class="result-label">所需最小长度</span>
+            <span class="result-value" id="parallelMinLength"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">判定</span>
+            <span class="result-value" id="parallelStatus"></span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">反推建议</div>
+          <div class="result-row">
+            <span class="result-label">推荐车位尺寸</span>
+            <span class="result-value" id="recommendedSize"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">最大适配车型</span>
+            <span class="result-value" id="maxVehicleSize"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 导出按钮 -->
+    <div class="export-buttons">
+      <button id="exportJSON">导出 JSON</button>
+      <button id="exportMD">导出 Markdown</button>
+      <button id="exportCSV">导出 CSV</button>
+    </div>
+    
+    <div class="footer">
+      <p>说明：所有计算基于简化几何模型，仅供参考。实际泊车需考虑驾驶技术、路面条件等因素。</p>
+      <p>默认样例为虚构数据。不做车位选购建议，不查询真实车型数据库。</p>
+    </div>
+  </div>
+  
+  
+  <script>
+/**
+ * 车位的余量 - 泊车空间计算核心引擎
+ * 
+ * 所有长度以毫米(mm)为单位进行整数计算，避免浮点误差
+ * 输入输出接口使用米(m)，内部计算使用毫米
+ */
+
+const ParkingCore = (() => {
+  'use strict';
+
+  // 常量定义
+  const MM_PER_M = 1000;
+  const DEFAULT_DOOR_WIDTH = 600; // 默认车门宽度 600mm (0.6m)
+  const DEFAULT_TURNING_RADIUS = 5500; // 默认转弯半径 5.5m
+  const MIN_FRONT_REAR_CLEARANCE = 100; // 最小前后余量 100mm
+  const MIN_SIDE_CLEARANCE = 50; // 最小左右余量 50mm
+  const COMFORTABLE_MARGIN = 150; // 舒适余量额外 150mm
+
+  // 开门空间判定阈值(mm)
+  const DOOR_THRESHOLDS = {
+    NORMAL: 600,      // ≥600mm 正常开门
+    SQUEEZE: 300,     // 300-600mm 侧身挤出
+    BLOCKED: 300      // <300mm 开不了门
+  };
+
+  /**
+   * 将米转换为毫米整数
+   */
+  function metersToMm(meters) {
+    return Math.round(meters * MM_PER_M);
+  }
+
+  /**
+   * 将毫米转换为米
+   */
+  function mmToMeters(mm) {
+    return mm / MM_PER_M;
+  }
+
+  /**
+   * 计算垂直式泊车的余量
+   * @param {Object} params
+   * @param {number} params.carLength - 车长(mm)
+   * @param {number} params.carWidth - 车宽(mm)
+   * @param {number} params.spaceLength - 车位长度(mm)
+   * @param {number} params.spaceWidth - 车位宽度(mm)
+   * @returns {Object} 余量计算结果
+   */
+  function calculatePerpendicularParking(params) {
+    const { carLength, carWidth, spaceLength, spaceWidth } = params;
+
+    // 前后余量
+    const frontRearClearance = spaceLength - carLength;
+    
+    // 左右余量
+    const sideClearance = spaceWidth - carWidth;
+    
+    // 单侧开门空间
+    const doorSpacePerSide = Math.floor(sideClearance / 2);
+
+    return {
+      frontRearClearance,
+      sideClearance,
+      doorSpacePerSide,
+      canFit: frontRearClearance >= 0 && sideClearance >= 0
+    };
+  }
+
+  /**
+   * 计算平行式泊车所需最小车位长度
+   * 使用简化公式: L_min = L_car + 1.5 × R
+   * 其中R是转弯半径
+   * 
+   * @param {number} carLength - 车长(mm)
+   * @param {number} turningRadius - 转弯半径(mm)
+   * @returns {number} 所需最小长度(mm)
+   */
+  function calculateParallelParkingMinLength(carLength, turningRadius) {
+    return carLength + Math.round(1.5 * turningRadius);
+  }
+
+  /**
+   * 判定开门空间等级
+   * @param {number} doorSpace - 单侧开门空间(mm)
+   * @returns {string} 'normal' | 'squeeze' | 'blocked'
+   */
+  function judgeDoorSpace(doorSpace) {
+    if (doorSpace >= DOOR_THRESHOLDS.NORMAL) {
+      return 'normal';
+    } else if (doorSpace >= DOOR_THRESHOLDS.SQUEEZE) {
+      return 'squeeze';
+    } else {
+      return 'blocked';
+    }
+  }
+
+  /**
+   * 判定总体泊车情况
+   * @param {Object} clearances - 余量数据
+   * @param {number} clearances.frontRearClearance
+   * @param {number} clearances.sideClearance
+   * @returns {string} 'plenty' | 'tight' | 'insufficient'
+   */
+  function judgeOverallFit(clearances) {
+    const { frontRearClearance, sideClearance } = clearances;
+
+    // 不够：任一方向余量为负
+    if (frontRearClearance < 0 || sideClearance < 0) {
+      return 'insufficient';
+    }
+
+    // 不够：任一方向余量小于最小阈值
+    if (frontRearClearance < MIN_FRONT_REAR_CLEARANCE || 
+        sideClearance < MIN_SIDE_CLEARANCE) {
+      return 'insufficient';
+    }
+
+    // 够用有余量：所有方向余量 >= 阈值 + 舒适余量
+    if (frontRearClearance >= (MIN_FRONT_REAR_CLEARANCE + COMFORTABLE_MARGIN) &&
+        sideClearance >= (MIN_SIDE_CLEARANCE + COMFORTABLE_MARGIN)) {
+      return 'plenty';
+    }
+
+    // 刚够没余量
+    return 'tight';
+  }
+
+  /**
+   * 反推：要获得舒适余量需要的车位尺寸
+   * @param {number} carLength - 车长(mm)
+   * @param {number} carWidth - 车宽(mm)
+   * @returns {Object} 推荐车位尺寸
+   */
+  function recommendSpaceSize(carLength, carWidth) {
+    const recommendedLength = carLength + MIN_FRONT_REAR_CLEARANCE + COMFORTABLE_MARGIN;
+    const recommendedWidth = carWidth + MIN_SIDE_CLEARANCE + COMFORTABLE_MARGIN;
+
+    return {
+      length: recommendedLength,
+      width: recommendedWidth
+    };
+  }
+
+  /**
+   * 反推：该车位最大适配车型尺寸
+   * @param {number} spaceLength - 车位长度(mm)
+   * @param {number} spaceWidth - 车位宽度(mm)
+   * @returns {Object} 最大车型尺寸
+   */
+  function calculateMaxVehicleSize(spaceLength, spaceWidth) {
+    // 预留最小余量
+    const maxLength = spaceLength - MIN_FRONT_REAR_CLEARANCE;
+    const maxWidth = spaceWidth - MIN_SIDE_CLEARANCE;
+
+    return {
+      maxLength: Math.max(0, maxLength),
+      maxWidth: Math.max(0, maxWidth)
+    };
+  }
+
+  /**
+   * 主计算函数
+   * @param {Object} input - 输入参数(米为单位)
+   * @param {number} input.carLength - 车长(m)
+   * @param {number} input.carWidth - 车宽(m)
+   * @param {number} input.spaceLength - 车位长度(m)
+   * @param {number} input.spaceWidth - 车位宽度(m)
+   * @param {number} [input.doorWidth=0.6] - 车门宽度(m)
+   * @param {number} [input.turningRadius=5.5] - 转弯半径(m)
+   * @returns {Object} 计算结果
+   */
+  function calculate(input) {
+    // 转换为毫米整数
+    const carLength = metersToMm(input.carLength);
+    const carWidth = metersToMm(input.carWidth);
+    const spaceLength = metersToMm(input.spaceLength);
+    const spaceWidth = metersToMm(input.spaceWidth);
+    const doorWidth = metersToMm(input.doorWidth || 0.6);
+    const turningRadius = metersToMm(input.turningRadius || 5.5);
+
+    // 输入验证
+    if (carLength <= 0 || carWidth <= 0 || spaceLength <= 0 || spaceWidth <= 0) {
+      throw new Error('车辆和车位尺寸必须大于0');
+    }
+
+    if (doorWidth <= 0 || turningRadius <= 0) {
+      throw new Error('车门宽度和转弯半径必须大于0');
+    }
+
+    // 计算垂直式泊车余量
+    const clearances = calculatePerpendicularParking({
+      carLength,
+      carWidth,
+      spaceLength,
+      spaceWidth
+    });
+
+    // 计算平行泊车所需长度
+    const parallelMinLength = calculateParallelParkingMinLength(carLength, turningRadius);
+    const parallelLengthDeficit = parallelMinLength - spaceLength;
+    const canParallelPark = parallelLengthDeficit <= 0;
+
+    // 判定开门空间
+    const doorSpaceJudgment = judgeDoorSpace(clearances.doorSpacePerSide);
+
+    // 判定总体情况
+    const overallJudgment = judgeOverallFit(clearances);
+
+    // 反推建议
+    const recommended = recommendSpaceSize(carLength, carWidth);
+    const maxVehicle = calculateMaxVehicleSize(spaceLength, spaceWidth);
+
+    // 组装结果(转换回米)
+    return {
+      // 输入参数(mm，内部使用)
+      _internal: {
+        carLength,
+        carWidth,
+        spaceLength,
+        spaceWidth,
+        doorWidth,
+        turningRadius
+      },
+
+      // 余量数据(mm)
+      clearances: {
+        frontRear: clearances.frontRearClearance,
+        side: clearances.sideClearance,
+        doorPerSide: clearances.doorSpacePerSide
+      },
+
+      // 余量数据(m，用于显示)
+      clearancesM: {
+        frontRear: mmToMeters(clearances.frontRearClearance),
+        side: mmToMeters(clearances.sideClearance),
+        doorPerSide: mmToMeters(clearances.doorSpacePerSide)
+      },
+
+      // 余量数据(cm，用于显示，向下取整)
+      clearancesCm: {
+        frontRear: Math.floor(clearances.frontRearClearance / 10),
+        side: Math.floor(clearances.sideClearance / 10),
+        doorPerSide: Math.floor(clearances.doorSpacePerSide / 10)
+      },
+
+      // 判定结果
+      judgments: {
+        overall: overallJudgment,  // 'plenty' | 'tight' | 'insufficient'
+        doorSpace: doorSpaceJudgment,  // 'normal' | 'squeeze' | 'blocked'
+        canFit: clearances.canFit
+      },
+
+      // 平行泊车
+      parallelParking: {
+        minLength: mmToMeters(parallelMinLength),
+        minLengthCm: Math.floor(parallelMinLength / 10),
+        deficit: mmToMeters(parallelLengthDeficit),
+        deficitCm: Math.floor(parallelLengthDeficit / 10),
+        canPark: canParallelPark
+      },
+
+      // 反推建议
+      recommendations: {
+        spaceSize: {
+          length: mmToMeters(recommended.length),
+          width: mmToMeters(recommended.width),
+          lengthCm: Math.floor(recommended.length / 10),
+          widthCm: Math.floor(recommended.width / 10)
+        },
+        maxVehicle: {
+          length: mmToMeters(maxVehicle.maxLength),
+          width: mmToMeters(maxVehicle.maxWidth),
+          lengthCm: Math.floor(maxVehicle.maxLength / 10),
+          widthCm: Math.floor(maxVehicle.maxWidth / 10)
+        }
+      }
+    };
+  }
+
+  /**
+   * 获取判定文本描述
+   */
+  function getJudgmentTexts(result) {
+    const { overall, doorSpace } = result.judgments;
+
+    let overallText, overallClass, doorText;
+
+    switch (overall) {
+      case 'plenty':
+        overallText = '够用有余量';
+        overallClass = 'plenty';
+        break;
+      case 'tight':
+        overallText = '刚够没余量';
+        overallClass = 'tight';
+        break;
+      case 'insufficient':
+        overallText = '不够';
+        overallClass = 'insufficient';
+        break;
+    }
+
+    switch (doorSpace) {
+      case 'normal':
+        doorText = '能正常开门';
+        break;
+      case 'squeeze':
+        doorText = '只能侧身挤出';
+        break;
+      case 'blocked':
+        doorText = '开不了门';
+        break;
+    }
+
+    return {
+      overall: overallText,
+      overallClass,
+      doorSpace: doorText
+    };
+  }
+
+  // 导出API
+  return {
+    calculate,
+    getJudgmentTexts,
+    
+    // 导出常量供外部使用
+    constants: {
+      MM_PER_M,
+      DEFAULT_DOOR_WIDTH,
+      DEFAULT_TURNING_RADIUS,
+      MIN_FRONT_REAR_CLEARANCE,
+      MIN_SIDE_CLEARANCE,
+      COMFORTABLE_MARGIN,
+      DOOR_THRESHOLDS
+    }
+  };
+})();
+
+// Node.js 环境导出
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = ParkingCore;
+}
+
+// 浏览器环境全局对象
+if (typeof window !== 'undefined') {
+  window.AppCore = ParkingCore;
+}
+
+  </script>
+  <script>
+/**
+ * 车位的余量 - UI渲染层
+ */
+
+const ParkingUI = (() => {
+  'use strict';
+
+  let currentResult = null;
+
+  /**
+   * 初始化应用
+   */
+  function init() {
+    loadFromStorage();
+    attachEventListeners();
+    calculate();
+  }
+
+  /**
+   * 从输入框读取参数
+   */
+  function getInputParams() {
+    return {
+      carLength: parseFloat(document.getElementById('carLength').value) || 4.5,
+      carWidth: parseFloat(document.getElementById('carWidth').value) || 1.8,
+      spaceLength: parseFloat(document.getElementById('spaceLength').value) || 5.0,
+      spaceWidth: parseFloat(document.getElementById('spaceWidth').value) || 2.4,
+      doorWidth: parseFloat(document.getElementById('doorWidth').value) || 0.6,
+      turningRadius: parseFloat(document.getElementById('turningRadius').value) || 5.5
+    };
+  }
+
+  /**
+   * 执行计算并渲染结果
+   */
+  function calculate() {
+    try {
+      const params = getInputParams();
+      currentResult = window.AppCore.calculate(params);
+      render(currentResult);
+      saveToStorage();
+    } catch (error) {
+      showError(error.message);
+    }
+  }
+
+  /**
+   * 渲染结果
+   */
+  function render(result) {
+    renderDiagram(result);
+    renderResults(result);
+    document.getElementById('error').style.display = 'none';
+  }
+
+  /**
+   * 渲染俯视示意图
+   */
+  function renderDiagram(result) {
+    const svg = document.getElementById('diagram');
+    const { carLength, carWidth, spaceLength, spaceWidth } = result._internal;
+    
+    // 计算缩放比例（SVG宽度600px）
+    const svgWidth = 600;
+    const svgHeight = 400;
+    const margin = 40;
+    
+    const maxDim = Math.max(spaceLength, spaceWidth);
+    const scale = (svgWidth - margin * 2) / maxDim;
+    
+    // 车位尺寸（像素）
+    const spaceW = spaceWidth * scale;
+    const spaceH = spaceLength * scale;
+    
+    // 车辆尺寸（像素）
+    const carW = carWidth * scale;
+    const carH = carLength * scale;
+    
+    // 居中对齐
+    const spaceX = (svgWidth - spaceW) / 2;
+    const spaceY = (svgHeight - spaceH) / 2;
+    const carX = spaceX + (spaceW - carW) / 2;
+    const carY = spaceY + (spaceH - carH) / 2;
+    
+    // 清空并重绘
+    svg.innerHTML = '';
+    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    
+    // 绘制车位（外框）
+    const spaceRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    spaceRect.setAttribute('x', spaceX);
+    spaceRect.setAttribute('y', spaceY);
+    spaceRect.setAttribute('width', spaceW);
+    spaceRect.setAttribute('height', spaceH);
+    spaceRect.setAttribute('fill', 'none');
+    spaceRect.setAttribute('stroke', '#666');
+    spaceRect.setAttribute('stroke-width', '2');
+    spaceRect.setAttribute('stroke-dasharray', '5,5');
+    svg.appendChild(spaceRect);
+    
+    // 绘制车辆
+    const carRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    carRect.setAttribute('x', carX);
+    carRect.setAttribute('y', carY);
+    carRect.setAttribute('width', carW);
+    carRect.setAttribute('height', carH);
+    
+    // 根据判定着色
+    const judgment = result.judgments.overall;
+    let carFill = '#4CAF50';  // 绿色：够用
+    if (judgment === 'tight') carFill = '#FF9800';  // 橙色：刚够
+    if (judgment === 'insufficient') carFill = '#f44336';  // 红色：不够
+    
+    carRect.setAttribute('fill', carFill);
+    carRect.setAttribute('fill-opacity', '0.3');
+    carRect.setAttribute('stroke', carFill);
+    carRect.setAttribute('stroke-width', '2');
+    svg.appendChild(carRect);
+    
+    // 标注余量
+    const { frontRear, side } = result.clearancesCm;
+    
+    // 前后余量标注
+    if (frontRear >= 0) {
+      const text1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text1.setAttribute('x', svgWidth / 2);
+      text1.setAttribute('y', spaceY - 10);
+      text1.setAttribute('text-anchor', 'middle');
+      text1.setAttribute('fill', '#666');
+      text1.setAttribute('font-size', '12');
+      text1.textContent = `前后余量: ${frontRear}cm`;
+      svg.appendChild(text1);
+    }
+    
+    // 左右余量标注
+    if (side >= 0) {
+      const text2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text2.setAttribute('x', spaceX - 10);
+      text2.setAttribute('y', svgHeight / 2);
+      text2.setAttribute('text-anchor', 'end');
+      text2.setAttribute('fill', '#666');
+      text2.setAttribute('font-size', '12');
+      text2.textContent = `左右余量: ${side}cm`;
+      svg.appendChild(text2);
+    }
+    
+    // 图例
+    const legend = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    legend.setAttribute('x', svgWidth / 2);
+    legend.setAttribute('y', svgHeight - 10);
+    legend.setAttribute('text-anchor', 'middle');
+    legend.setAttribute('fill', '#999');
+    legend.setAttribute('font-size', '10');
+    legend.textContent = '俯视图（按比例绘制）';
+    svg.appendChild(legend);
+  }
+
+  /**
+   * 渲染结果卡片
+   */
+  function renderResults(result) {
+    const texts = window.AppCore.getJudgmentTexts(result);
+    
+    // 主判定
+    document.getElementById('overallJudgment').textContent = texts.overall;
+    document.getElementById('overallJudgment').className = `judgment ${texts.overallClass}`;
+    
+    // 余量数据
+    const { frontRear, side, doorPerSide } = result.clearancesCm;
+    document.getElementById('frontRearClearance').textContent = 
+      `${frontRear >= 0 ? frontRear : '不够'} cm`;
+    document.getElementById('sideClearance').textContent = 
+      `${side >= 0 ? side : '不够'} cm`;
+    document.getElementById('doorSpace').textContent = 
+      `${doorPerSide >= 0 ? doorPerSide : 0} cm`;
+    document.getElementById('doorJudgment').textContent = texts.doorSpace;
+    
+    // 平行泊车
+    const { minLengthCm, canPark, deficitCm } = result.parallelParking;
+    document.getElementById('parallelMinLength').textContent = `${minLengthCm} cm`;
+    document.getElementById('parallelStatus').textContent = 
+      canPark ? '✓ 可以平行泊车' : `✗ 不够（还差${Math.abs(deficitCm)}cm）`;
+    document.getElementById('parallelStatus').className = canPark ? 'success' : 'error';
+    
+    // 反推建议
+    const { lengthCm, widthCm } = result.recommendations.spaceSize;
+    document.getElementById('recommendedSize').textContent = 
+      `长${lengthCm}cm × 宽${widthCm}cm`;
+    
+    const { lengthCm: maxL, widthCm: maxW } = result.recommendations.maxVehicle;
+    document.getElementById('maxVehicleSize').textContent = 
+      `长${maxL}cm × 宽${maxW}cm`;
+  }
+
+  /**
+   * 显示错误
+   */
+  function showError(message) {
+    const errorDiv = document.getElementById('error');
+    errorDiv.textContent = `计算错误：${message}`;
+    errorDiv.style.display = 'block';
+  }
+
+  /**
+   * 导出结果
+   */
+  function exportResults(format) {
+    if (!currentResult) return;
+    
+    const params = getInputParams();
+    const texts = window.AppCore.getJudgmentTexts(currentResult);
+    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    if (format === 'json') {
+      const data = { timestamp, params, result: currentResult };
+      downloadFile(JSON.stringify(data, null, 2), 'parking-space.json', 'application/json');
+    } else if (format === 'md') {
+      const md = generateMarkdown(params, currentResult, texts, timestamp);
+      downloadFile(md, 'parking-space.md', 'text/markdown');
+    } else if (format === 'csv') {
+      const csv = generateCSV(params, currentResult);
+      downloadFile(csv, 'parking-space.csv', 'text/csv');
+    }
+  }
+
+  /**
+   * 生成Markdown报告
+   */
+  function generateMarkdown(params, result, texts, timestamp) {
+    const { frontRear, side, doorPerSide } = result.clearancesCm;
+    return `# 车位余量计算报告
+
+生成时间：${timestamp}
+
+## 输入参数
+
+- 车辆：长${params.carLength}m × 宽${params.carWidth}m
+- 车位：长${params.spaceLength}m × 宽${params.spaceWidth}m
+- 车门宽度：${params.doorWidth}m
+- 转弯半径：${params.turningRadius}m
+
+## 计算结果
+
+### 总体判定：${texts.overall}
+
+### 余量数据
+
+- 前后余量：${frontRear}cm
+- 左右余量：${side}cm
+- 单侧开门空间：${doorPerSide}cm
+- 开门判定：${texts.doorSpace}
+
+### 平行泊车
+
+- 所需最小长度：${result.parallelParking.minLengthCm}cm
+- 判定：${result.parallelParking.canPark ? '可以平行泊车' : '不够'}
+
+### 反推建议
+
+- 推荐车位尺寸：${result.recommendations.spaceSize.lengthCm}cm × ${result.recommendations.spaceSize.widthCm}cm
+- 该车位最大适配车型：${result.recommendations.maxVehicle.lengthCm}cm × ${result.recommendations.maxVehicle.widthCm}cm
+
+---
+*由「车位的余量」生成*
+`;
+  }
+
+  /**
+   * 生成CSV
+   */
+  function generateCSV(params, result) {
+    const rows = [
+      ['项目', '数值'],
+      ['车长(m)', params.carLength],
+      ['车宽(m)', params.carWidth],
+      ['车位长(m)', params.spaceLength],
+      ['车位宽(m)', params.spaceWidth],
+      ['前后余量(cm)', result.clearancesCm.frontRear],
+      ['左右余量(cm)', result.clearancesCm.side],
+      ['单侧开门(cm)', result.clearancesCm.doorPerSide],
+      ['平行泊车最小长度(cm)', result.parallelParking.minLengthCm]
+    ];
+    return rows.map(r => r.join(',')).join('\n');
+  }
+
+  /**
+   * 下载文件
+   */
+  function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * 保存到本地存储
+   */
+  function saveToStorage() {
+    const params = getInputParams();
+    localStorage.setItem('parkingSpace', JSON.stringify(params));
+  }
+
+  /**
+   * 从本地存储加载
+   */
+  function loadFromStorage() {
+    const saved = localStorage.getItem('parkingSpace');
+    if (saved) {
+      try {
+        const params = JSON.parse(saved);
+        document.getElementById('carLength').value = params.carLength || 4.5;
+        document.getElementById('carWidth').value = params.carWidth || 1.8;
+        document.getElementById('spaceLength').value = params.spaceLength || 5.0;
+        document.getElementById('spaceWidth').value = params.spaceWidth || 2.4;
+        document.getElementById('doorWidth').value = params.doorWidth || 0.6;
+        document.getElementById('turningRadius').value = params.turningRadius || 5.5;
+      } catch (e) {
+        console.error('Failed to load from storage:', e);
+      }
+    }
+  }
+
+  /**
+   * 绑定事件监听
+   */
+  function attachEventListeners() {
+    // 输入变化时重新计算
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+      input.addEventListener('input', calculate);
+    });
+    
+    // 导出按钮
+    document.getElementById('exportJSON').addEventListener('click', () => exportResults('json'));
+    document.getElementById('exportMD').addEventListener('click', () => exportResults('md'));
+    document.getElementById('exportCSV').addEventListener('click', () => exportResults('csv'));
+  }
+
+  return { init };
+})();
+
+// 页面加载完成后初始化
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', ParkingUI.init);
+} else {
+  ParkingUI.init();
+}
+
+  </script>
+</body>
+</html>
